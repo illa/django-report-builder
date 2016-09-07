@@ -89,12 +89,16 @@ def increment_total(display_field, data_row):
     elif val:
         display_field.total_count += Decimal(1)
 
+def date_formatter(value, style):
+    return value.strftime(style)
 
 def formatter(value, style):
     """ Convert value to Decimal to apply numeric formats.
     value - The value we wish to format.
     style - report_builder.Format object
     """
+    if type(value) == datetime.datetime:
+        return date_formatter(value, style.string)
     try:
         value = Decimal(value)
     except Exception:
