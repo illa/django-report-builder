@@ -137,6 +137,40 @@ class Report(models.Model):
             pass
         return "Invalid"
 
+    def row_sum(self, row1, row2, fields):
+        result = []
+        for i, e in enumerate(row1):
+            if fields[i].group:
+                result.append(row1[i])
+            else:#if fields[i].aggregate in ['Sum', 'Count']:
+                result.append(row1[i]+row2[i])
+        return result
+
+    def group_by(self, data_list, display_fields):
+        groups = {}
+        fields = {}
+        fields_with_group = []
+        
+        for field in display_fields:
+            if field.group:
+                fields_with_group.append(field.position)
+            fields[field.position] = field
+        
+        for row in data_list:
+            key = ""
+            for field in fields_with_group:
+                key += ": " + str(row[field])
+            if key not in groups:
+                groups[key] = row
+            else:
+                groups[key] = self.row_sum(row, groups[key], fields)
+        
+        result = []
+        for key in groups:
+            result.append(groups[key])
+        print result
+        return result
+
     def get_good_display_fields(self):
         """ Returns only valid display fields """
         display_fields = self.displayfield_set.all()
@@ -207,7 +241,7 @@ class Report(models.Model):
 
         # To support group-by with multiple fields, we turn all the other
         # fields into aggregations. The default aggregation is `Max`.
-        if group:
+        """if group:
             for field in display_fields:
                 if (not field.group) and (not field.aggregate):
                     field.aggregate = 'Max'
@@ -227,6 +261,8 @@ class Report(models.Model):
                     increment_total(total, row_data)
                 data_list.append(row_data)
         else:
+        """
+        if True:
             values_list = list(queryset.values_list(*display_field_paths))
 
             data_list = []
@@ -268,7 +304,9 @@ class Report(models.Model):
                         value_row = values_list[values_index]
                     except IndexError:
                         break
-
+        if group:
+            data_list = self.group_by(data_list, display_fields)
+        
         for display_field in display_fields.filter(
             sort__gt=0
         ).order_by('-sort'):
