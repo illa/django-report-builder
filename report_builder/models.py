@@ -137,39 +137,89 @@ class Report(models.Model):
             pass
         return "Invalid"
 
-    def row_sum(self, row1, row2, fields):
+
+    def noneToZero(self, value):
+        if value is None:
+            return 0
+        return value
+
+
+    def row_init(self, row, fields):
         result = []
-        for i, e in enumerate(row1):
+        for i in xrange(len(row)):
+            r1 = self.noneToZero(row[i])
             if fields[i].group:
-                result.append(row1[i])
-            else:#if fields[i].aggregate in ['Sum', 'Count']:
-                result.append(row1[i]+row2[i])
+                result.append(row[i])
+            elif fields[i].aggregate in ['Sum', 'Avg', 'Min', 'Max']:
+                result.append(r1)
+            elif fields[i].aggregate == 'Count':
+                if row[i] is not None:
+                    result.append(1)
+                else:
+                    result.append(0)
+            else:
+                result.append(row[i])
         return result
+
+
+    def row_sum(self, new_row, aggregated_row, fields):
+        result = []
+        for i in xrange(len(new_row)):
+            r1 = self.noneToZero(new_row[i])
+            r2 = self.noneToZero(aggregated_row[i])
+            if fields[i].group:
+                result.append(aggregated_row[i])
+            elif fields[i].aggregate in ['Sum', 'Avg']:
+                result.append(r1+r2)
+            elif fields[i].aggregate == 'Count':
+                if new_row[i] is not None:
+                    result.append(r2+1)
+            elif fields[i].aggregate == 'Min':
+                result.append(min(r1, r2))
+            elif fields[i].aggregate == 'Max':
+                result.append(max(r1, r2))
+            else:
+                result.append(aggregated_row[i])
+        return result
+
 
     def group_by(self, data_list, display_fields):
         groups = {}
         fields = {}
         fields_with_group = []
+        elements_in_group = {}
         
         for field in display_fields:
             if field.group:
                 fields_with_group.append(field.position)
             fields[field.position] = field
+
         
         for row in data_list:
             key = ""
             for field in fields_with_group:
                 key += ": " + str(row[field])
             if key not in groups:
-                groups[key] = row
+                groups[key] = self.row_init(row, fields)
+                elements_in_group[key] = [0 for i in xrange(len(row))]
+                for i in xrange(len(row)):
+                    if row[i] is not None:
+                        elements_in_group[key][i] = 1
             else:
                 groups[key] = self.row_sum(row, groups[key], fields)
-        
+                for i in xrange(len(row)):
+                    if row[i] is not None:
+                        elements_in_group[key][i] += 1
+
         result = []
         for key in groups:
-            result.append(groups[key])
-        print result
+            row = groups[key]
+            for i in xrange(len(row)):
+                if fields[i].aggregate == 'Avg' and elements_in_group[key][i] > 0:
+                    row[i] = 1.0 * row[i] / elements_in_group[key][i]
+            result.append(row)
         return result
+
 
     def get_good_display_fields(self):
         """ Returns only valid display fields """
@@ -208,12 +258,7 @@ class Report(models.Model):
                 insert_property_indexes.append(i)
             else:
                 i += 1
-                if display_field.aggregate:
-                    display_field_paths += [
-                        display_field.field_key +
-                        '__' + display_field.aggregate.lower()]
-                else:
-                    display_field_paths += [display_field.field_key]
+                display_field_paths += [display_field.field_key]
 
             # Build display choices list
             if display_field.choices and hasattr(display_field, 'choices_dict'):
@@ -237,76 +282,51 @@ class Report(models.Model):
             if filter_field_type == "Property":
                 property_filters += [field]
 
-        group = [df.path + df.field for df in display_fields if df.group]
+        values_list = list(queryset.values_list(*display_field_paths))
+        data_list = []
+        values_index = 0
+        for obj in queryset:
+            display_property_values = []
+            for display_property in display_field_properties:
+                relations = display_property.split('__')
+                val = reduce(getattr, relations, obj)
+                display_property_values.append(val)
 
-        # To support group-by with multiple fields, we turn all the other
-        # fields into aggregations. The default aggregation is `Max`.
-        """if group:
-            for field in display_fields:
-                if (not field.group) and (not field.aggregate):
-                    field.aggregate = 'Max'
-            values = queryset.values(*group)
-            values = self.add_aggregates(values, display_fields)
-            data_list = []
-            for row in values:
-                row_data = []
-                for field in display_field_paths:
-                    if field == 'pk':
-                        continue
-                    try:
-                        row_data.append(row[field])
-                    except KeyError:
-                        row_data.append(row[field + '__max'])
-                for total in display_totals:
-                    increment_total(total, row_data)
-                data_list.append(row_data)
-        else:
-        """
-        if True:
-            values_list = list(queryset.values_list(*display_field_paths))
-
-            data_list = []
-            values_index = 0
-            for obj in queryset:
-                display_property_values = []
-                for display_property in display_field_properties:
-                    relations = display_property.split('__')
+            value_row = values_list[values_index]
+            while value_row[0] == obj.pk:
+                add_row = True
+                data_row = list(value_row[1:])  # Remove added pk
+                # Insert in the location dictated by the order of display fields
+                for i, prop_value in enumerate(display_property_values):
+                    data_row.insert(insert_property_indexes[i], prop_value)
+                for property_filter in property_filters:
+                    relations = property_filter.field_key.split('__')
                     val = reduce(getattr, relations, obj)
-                    display_property_values.append(val)
+                    if property_filter.filter_property(val):
+                        add_row = False
 
-                value_row = values_list[values_index]
-                while value_row[0] == obj.pk:
-                    add_row = True
-                    data_row = list(value_row[1:])  # Remove added pk
-                    # Insert in the location dictated by the order of display fields
-                    for i, prop_value in enumerate(display_property_values):
-                        data_row.insert(insert_property_indexes[i], prop_value)
-                    for property_filter in property_filters:
-                        relations = property_filter.field_key.split('__')
-                        val = reduce(getattr, relations, obj)
-                        if property_filter.filter_property(val):
-                            add_row = False
+                if add_row is True:
+                    for total in display_totals:
+                        increment_total(total, data_row)
+                    # Replace choice data with display choice string
+                    for position, choice_list in choice_lists.items():
+                        try:
+                            data_row[position] = text_type(choice_list[data_row[position]])
+                        except Exception:
+                            data_row[position] = text_type(data_row[position])
+                    for position, style in display_formats.items():
+                        data_row[position] = formatter(data_row[position], style)
+                    data_list.append(data_row)
+                values_index += 1
+                try:
+                    value_row = values_list[values_index]
+                except IndexError:
+                    break
 
-                    if add_row is True:
-                        for total in display_totals:
-                            increment_total(total, data_row)
-                        # Replace choice data with display choice string
-                        for position, choice_list in choice_lists.items():
-                            try:
-                                data_row[position] = text_type(choice_list[data_row[position]])
-                            except Exception:
-                                data_row[position] = text_type(data_row[position])
-                        for position, style in display_formats.items():
-                            data_row[position] = formatter(data_row[position], style)
-                        data_list.append(data_row)
-                    values_index += 1
-                    try:
-                        value_row = values_list[values_index]
-                    except IndexError:
-                        break
+        group = [df.path + df.field for df in display_fields if df.group]
         if group:
             data_list = self.group_by(data_list, display_fields)
-        
+            
         for display_field in display_fields.filter(
             sort__gt=0
         ).order_by('-sort'):
@@ -384,23 +404,6 @@ class Report(models.Model):
             objects = objects.filter(**filters)
         if excludes:
             objects = objects.exclude(**excludes)
-
-        # Apply annotation-filters after regular filters.
-        for filter_field in report.filterfield_set.order_by('position'):
-            if filter_field.filter_type in ('max', 'min'):
-                func = {'max': Max, 'min': Min}[filter_field.filter_type]
-                column_name = '{0}{1}__{2}'.format(
-                    filter_field.path,
-                    filter_field.field,
-                    filter_field.field_type
-                )
-                filter_string = filter_field.path + filter_field.field
-                annotate_args = {column_name: func(filter_string)}
-                filter_args = {column_name: F(filter_field.field)}
-                objects = objects.annotate(**annotate_args).filter(**filter_args)
-
-        # Aggregates
-        objects = self.add_aggregates(objects)
 
         # Distinct
         if report.distinct:
