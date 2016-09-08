@@ -101,22 +101,19 @@ class DownloadFileView(DataExportMixin, View):
                        file_type, to_response, queryset=None):
         report = get_object_or_404(Report, pk=report_id)
         user = User.objects.get(pk=user_id)
+
         if not queryset:
             queryset = report.get_query()
 
         display_fields = report.get_good_display_fields()
-
-        objects_list, message = self.report_to_list(
-            queryset,
-            display_fields,
-            user,
-            preview=False,)
         title = re.sub(r'\W+', '', report.name)[:30]
         header = []
         widths = []
         for field in display_fields:
             header.append(field.name)
             widths.append(field.width)
+
+        objects_list = report.report_to_list(queryset=queryset, user=user, preview=False)
 
         if to_response:
             if file_type == 'csv':
