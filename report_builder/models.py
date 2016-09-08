@@ -338,7 +338,7 @@ class Report(models.Model):
             for display_field in display_totals:
                 while i < display_field.position:
                     i += 1
-                    display_totals_row.append('')
+                    display_totals_row.append(None)
                 i += 1
                 display_totals_row.append(display_field.total_count)
             # Add formats to display totals

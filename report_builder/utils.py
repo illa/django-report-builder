@@ -97,6 +97,9 @@ def formatter(value, style):
     value - The value we wish to format.
     style - report_builder.Format object
     """
+    if value is None:
+        return None
+
     if type(value) == datetime.datetime:
         return date_formatter(value, style.string)
     try:
