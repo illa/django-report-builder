@@ -89,6 +89,18 @@ def increment_total(display_field, data_row):
     elif val:
         display_field.total_count += Decimal(1)
 
+def add_to_total(val):
+    if isinstance(val, bool):
+        # True: 1, False: 0
+        if val:
+            return 1
+        return 0
+    elif isinstance(val, Number):
+        return val
+    elif val:
+        return 1
+    return 0
+
 def date_formatter(value, style):
     return value.strftime(style)
 

@@ -11,7 +11,7 @@ from django.db.models.fields import FieldDoesNotExist
 from six import text_type
 from report_builder.unique_slugify import unique_slugify
 from report_utils.model_introspection import get_model_from_path_string
-from .utils import sort_data, increment_total, formatter
+from .utils import sort_data, increment_total, formatter, add_to_total
 from dateutil import parser
 from decimal import Decimal
 from functools import reduce
@@ -137,49 +137,67 @@ class Report(models.Model):
             pass
         return "Invalid"
 
-
-    def noneToZero(self, value):
-        if value is None:
-            return 0
-        return value
-
-
     def row_init(self, row, fields):
         result = []
         for i in xrange(len(row)):
-            r1 = self.noneToZero(row[i])
+            r1 = row[i]
             if fields[i].group:
-                result.append(row[i])
+                result.append(r1)
             elif fields[i].aggregate in ['Sum', 'Avg', 'Min', 'Max']:
                 result.append(r1)
             elif fields[i].aggregate == 'Count':
-                if row[i] is not None:
+                if r1 is not None:
                     result.append(1)
                 else:
                     result.append(0)
             else:
-                result.append(row[i])
+                result.append(r1)
         return result
+
+    def sum_with_null(self, val1, val2):
+        if val1 is None:
+            return val2
+        if val2 is None:
+            return val1
+        return val1 + val2
+
+
+    def min_with_null(self, val1, val2):
+        if val1 is None:
+            return val2
+        if val2 is None:
+            return val1
+        return min(val1, val2)
+
+
+    def max_with_null(self, val1, val2):
+        if val1 is None:
+            return val2
+        if val2 is None:
+            return val1
+        return max(val1, val2)
 
 
     def row_sum(self, new_row, aggregated_row, fields):
         result = []
         for i in xrange(len(new_row)):
-            r1 = self.noneToZero(new_row[i])
-            r2 = self.noneToZero(aggregated_row[i])
+            r1 = new_row[i]
+            r2 = aggregated_row[i]
             if fields[i].group:
-                result.append(aggregated_row[i])
-            elif fields[i].aggregate in ['Sum', 'Avg']:
-                result.append(r1+r2)
-            elif fields[i].aggregate == 'Count':
-                if new_row[i] is not None:
-                    result.append(r2+1)
-            elif fields[i].aggregate == 'Min':
-                result.append(min(r1, r2))
-            elif fields[i].aggregate == 'Max':
-                result.append(max(r1, r2))
+                result.append(r1)
+            elif r1 is not None:
+                if fields[i].aggregate in ['Sum', 'Avg']:
+                    result.append(self.sum_with_null(r1, r2))
+                elif fields[i].aggregate == 'Count':
+                    result.append(self.sum_with_null(r2, 1))
+                elif fields[i].aggregate == 'Min':
+                    result.append(self.min_with_null(r1, r2))
+                elif fields[i].aggregate == 'Max':
+                    result.append(self.max_with_null(r1, r2))
+                else:
+                    result.append(r2)
             else:
-                result.append(aggregated_row[i])
+                result.append(r2)
         return result
 
 
@@ -188,13 +206,12 @@ class Report(models.Model):
         fields = {}
         fields_with_group = []
         elements_in_group = {}
-        
+
         for field in display_fields:
             if field.group:
                 fields_with_group.append(field.position)
             fields[field.position] = field
 
-        
         for row in data_list:
             key = ""
             for field in fields_with_group:
@@ -230,6 +247,16 @@ class Report(models.Model):
                 bad_display_fields.append(display_field)
         return display_fields.exclude(id__in=[o.id for o in bad_display_fields])
 
+
+    def add_format(self, row, display_formats, display_fields, groups):
+        for field in display_fields:
+            if field.position not in display_formats:
+                continue
+            style = display_formats[field.position]
+            if field.group == groups:
+                row[field.position] = formatter(row[field.position], style)
+
+
     def report_to_list(self, queryset=None, user=None, preview=False):
         """ Convert report into list. """
         property_filters = []
@@ -250,7 +277,6 @@ class Report(models.Model):
         i = 0
         for display_field in display_fields:
             if display_field.total:
-                display_field.total_count = Decimal(0.0)
                 display_totals.append(display_field)
             display_field_type = display_field.field_type
             if display_field_type == "Property":
@@ -306,16 +332,13 @@ class Report(models.Model):
                         add_row = False
 
                 if add_row is True:
-                    for total in display_totals:
-                        increment_total(total, data_row)
                     # Replace choice data with display choice string
                     for position, choice_list in choice_lists.items():
                         try:
                             data_row[position] = text_type(choice_list[data_row[position]])
                         except Exception:
                             data_row[position] = text_type(data_row[position])
-                    for position, style in display_formats.items():
-                        data_row[position] = formatter(data_row[position], style)
+                    self.add_format(data_row, display_formats, display_fields, True)
                     data_list.append(data_row)
                 values_index += 1
                 try:
@@ -326,7 +349,13 @@ class Report(models.Model):
         group = [df.path + df.field for df in display_fields if df.group]
         if group:
             data_list = self.group_by(data_list, display_fields)
-            
+
+        totals = [0 for i in display_fields]
+        for row in data_list:
+            for i in xrange(len(row)):
+                totals[i] += add_to_total(row[i])
+            self.add_format(row, display_formats, display_fields, False)
+
         for display_field in display_fields.filter(
             sort__gt=0
         ).order_by('-sort'):
@@ -340,7 +369,7 @@ class Report(models.Model):
                     i += 1
                     display_totals_row.append(None)
                 i += 1
-                display_totals_row.append(display_field.total_count)
+                display_totals_row.append(totals[i-1])
             # Add formats to display totals
             for pos, style in display_formats.items():
                 display_totals_row[pos] = formatter(display_totals_row[pos], style)
@@ -404,6 +433,20 @@ class Report(models.Model):
             objects = objects.filter(**filters)
         if excludes:
             objects = objects.exclude(**excludes)
+
+        # Apply annotation-filters after regular filters.
+        for filter_field in report.filterfield_set.order_by('position'):
+            if filter_field.filter_type in ('max', 'min'):
+                func = {'max': Max, 'min': Min}[filter_field.filter_type]
+                column_name = '{0}{1}__{2}'.format(
+                    filter_field.path,
+                    filter_field.field,
+                    filter_field.field_type
+                )
+                filter_string = filter_field.path + filter_field.field
+                annotate_args = {column_name: func(filter_string)}
+                filter_args = {column_name: F(filter_field.field)}
+                objects = objects.annotate(**annotate_args).filter(**filter_args)
 
         # Distinct
         if report.distinct:
