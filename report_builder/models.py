@@ -11,7 +11,7 @@ from django.db.models.fields import FieldDoesNotExist
 from six import text_type
 from report_builder.unique_slugify import unique_slugify
 from report_utils.model_introspection import get_model_from_path_string
-from .utils import sort_data, increment_total, formatter, add_to_total
+from .utils import sort_data, formatter, add_to_total
 from dateutil import parser
 from decimal import Decimal
 from functools import reduce
@@ -161,7 +161,6 @@ class Report(models.Model):
             return val1
         return val1 + val2
 
-
     def min_with_null(self, val1, val2):
         if val1 is None:
             return val2
@@ -169,14 +168,12 @@ class Report(models.Model):
             return val1
         return min(val1, val2)
 
-
     def max_with_null(self, val1, val2):
         if val1 is None:
             return val2
         if val2 is None:
             return val1
         return max(val1, val2)
-
 
     def row_sum(self, new_row, aggregated_row, fields):
         result = []
@@ -199,7 +196,6 @@ class Report(models.Model):
             else:
                 result.append(r2)
         return result
-
 
     def group_by(self, data_list, display_fields):
         groups = {}
@@ -237,7 +233,6 @@ class Report(models.Model):
             result.append(row)
         return result
 
-
     def get_good_display_fields(self):
         """ Returns only valid display fields """
         display_fields = self.displayfield_set.all()
@@ -247,7 +242,6 @@ class Report(models.Model):
                 bad_display_fields.append(display_field)
         return display_fields.exclude(id__in=[o.id for o in bad_display_fields])
 
-
     def add_format(self, row, display_formats, display_fields, groups):
         for field in display_fields:
             if field.position not in display_formats:
@@ -255,7 +249,6 @@ class Report(models.Model):
             style = display_formats[field.position]
             if field.group == groups:
                 row[field.position] = formatter(row[field.position], style)
-
 
     def report_to_list(self, queryset=None, user=None, preview=False):
         """ Convert report into list. """
@@ -369,7 +362,7 @@ class Report(models.Model):
                     i += 1
                     display_totals_row.append(None)
                 i += 1
-                display_totals_row.append(totals[i-1])
+                display_totals_row.append(totals[i - 1])
             # Add formats to display totals
             for pos, style in display_formats.items():
                 display_totals_row[pos] = formatter(display_totals_row[pos], style)

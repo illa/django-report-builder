@@ -1,5 +1,4 @@
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.auth.models import User
 from django.core import mail
 from django.core.urlresolvers import reverse
 from django.db.models.query import QuerySet
@@ -17,7 +16,8 @@ from report_utils.model_introspection import (
     get_relation_fields_from_model, get_model_from_path_string)
 from rest_framework.test import APIClient
 
-import time, datetime
+import time
+import datetime
 import csv
 
 try:

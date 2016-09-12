@@ -79,16 +79,6 @@ def sort_data(data_list, display_field):
     )
 
 
-def increment_total(display_field, data_row):
-    val = data_row[display_field.position]
-    if isinstance(val, bool):
-        # True: 1, False: 0
-        display_field.total_count += Decimal(val)
-    elif isinstance(val, Number):
-        display_field.total_count += Decimal(str(val))
-    elif val:
-        display_field.total_count += Decimal(1)
-
 def add_to_total(val):
     if isinstance(val, bool):
         # True: 1, False: 0
@@ -101,8 +91,10 @@ def add_to_total(val):
         return 1
     return 0
 
+
 def date_formatter(value, style):
     return value.strftime(style)
+
 
 def formatter(value, style):
     """ Convert value to Decimal to apply numeric formats.
