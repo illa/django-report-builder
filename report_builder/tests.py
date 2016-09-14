@@ -784,6 +784,82 @@ class ReportTests(TestCase):
 
         self.assertContains(response, data)
 
+    def test_filter_isnull(self):
+        self.make_people()
+
+        model = ContentType.objects.get(model='child', app_label="demo_models")
+        report = Report.objects.create(root_model=model, name='Kid Data')
+
+        DisplayField.objects.create(
+            report=report,
+            field='first_name',
+            field_verbose='First Name',
+            sort=4,
+            position=0,
+        )
+
+        DisplayField.objects.create(
+            report=report,
+            field='last_name',
+            field_verbose='Last Name',
+            sort=3,
+            position=1,
+        )
+
+        DisplayField.objects.create(
+            report=report,
+            field='age',
+            field_verbose='Child Age',
+            sort=2,
+            position=2,
+        )
+
+        FilterField.objects.create(
+            report=report,
+            field='age',
+            filter_type='isnull',
+            filter_value='True',
+        )
+
+        generate_url = reverse('generate_report', args=[report.id])
+        response = self.client.get(generate_url)
+        data = '"data":[["Charles","King",null]]'
+        self.assertContains(response, data)
+
+    def test_filter_isnull_foreign_key(self):
+        self.make_tiny_town()
+        r2 = Restaurant.objects.all()[2]
+        for w in r2.waiter_set.all():
+            w.delete()
+        r4 = Restaurant.objects.all()[4]
+        for w in r4.waiter_set.all():
+            w.delete()
+
+        model = ContentType.objects.get(model='restaurant', app_label="demo_models")
+        report = Report.objects.create(root_model=model, name='Waiters')
+
+        DisplayField.objects.create(
+            report=report,
+            path='place__',
+            field='name',
+            field_verbose='Place Name',
+            sort=1,
+            position=0,
+        )
+
+        FilterField.objects.create(
+            report=report,
+            path='waiter__',
+            field='id',
+            filter_type='isnull',
+            filter_value='True',
+        )
+
+        generate_url = reverse('generate_report', args=[report.id])
+        response = self.client.get(generate_url)
+        data = '"data":[["Fisherman\'s Warf"],["MOMA"]]'
+        self.assertContains(response, data)
+
     def test_datetime_formatter(self):
         user1 = User.objects.create_user('user1', '', '123')
         user2 = User.objects.create_user('user2', '', '123')

@@ -406,9 +406,10 @@ class Report(models.Model):
                 filter_string += '__' + filter_field.filter_type
 
             # Check for special types such as isnull
-            if (filter_field.filter_type == "isnull" and
-               filter_field.filter_value in ["0", "False"]):
-                filter_ = {filter_string: False}
+            if filter_field.filter_type == "isnull":
+                filter_ = {filter_string: True}
+                if filter_field.filter_value in ["0", "False"]:
+                    filter_ = {filter_string: False}
             elif filter_field.filter_type == "in":
                 filter_ = {filter_string: filter_field.filter_value.split(',')}
             else:
