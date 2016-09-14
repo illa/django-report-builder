@@ -303,41 +303,31 @@ class Report(models.Model):
 
         values_list = list(queryset.values_list(*display_field_paths))
         data_list = []
-        values_index = 0
-        for obj in queryset:
+        for value in values_list:
+            pk = value[0]
+            obj = queryset.filter(pk=pk)[0]
+            add_row = True
             display_property_values = []
             for display_property in display_field_properties:
                 relations = display_property.split('__')
                 val = reduce(getattr, relations, obj)
                 display_property_values.append(val)
-
-            value_row = values_list[values_index]
-            while value_row[0] == obj.pk:
-                add_row = True
-                data_row = list(value_row[1:])  # Remove added pk
-                # Insert in the location dictated by the order of display fields
-                for i, prop_value in enumerate(display_property_values):
-                    data_row.insert(insert_property_indexes[i], prop_value)
-                for property_filter in property_filters:
-                    relations = property_filter.field_key.split('__')
-                    val = reduce(getattr, relations, obj)
-                    if property_filter.filter_property(val):
-                        add_row = False
-
-                if add_row is True:
-                    # Replace choice data with display choice string
-                    for position, choice_list in choice_lists.items():
-                        try:
-                            data_row[position] = text_type(choice_list[data_row[position]])
-                        except Exception:
-                            data_row[position] = text_type(data_row[position])
-                    self.add_format(data_row, display_formats, display_fields, True)
-                    data_list.append(data_row)
-                values_index += 1
+            data_row = list(value[1:])
+            for i, prop_value in enumerate(display_property_values):
+                data_row.insert(insert_property_indexes[i], prop_value)
+            for property_filter in property_filters:
+                relations = property_filter.field_key.split('__')
+                val = reduce(getattr, relations, obj)
+                if property_filter.filter_property(val):
+                    add_row = False
+            for position, choice_list in choice_lists.items():
                 try:
-                    value_row = values_list[values_index]
-                except IndexError:
-                    break
+                    data_row[position] = text_type(choice_list[data_row[position]])
+                except Exception:
+                    data_row[position] = text_type(data_row[position])
+            if add_row:
+                data_list.append(data_row)
+                self.add_format(data_list[-1], display_formats, display_fields, True)
 
         group = [df.path + df.field for df in display_fields if df.group]
         if group:
