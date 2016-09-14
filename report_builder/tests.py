@@ -784,6 +784,35 @@ class ReportTests(TestCase):
 
         self.assertContains(response, data)
 
+    def make_users(self):
+        user1 = User.objects.create_user('alice', '', '123')
+        user2 = User.objects.create_user('chuck', '', '123')
+        user3 = User.objects.create_user('bob', '', '123')
+        user1.date_joined = datetime.datetime(2016, 9, 1, 7, 0, 0)
+        user2.date_joined = datetime.datetime(2016, 9, 2, 7, 10, 0)
+        user3.date_joined = datetime.datetime(2016, 9, 2, 7, 15, 0)
+        user1.save()
+        user2.save()
+        user3.save()
+
+    def test_users(self):
+        self.make_users()
+        model = ContentType.objects.get(model='user', app_label="auth")
+        report = Report.objects.create(root_model=model, name='User')
+
+        DisplayField.objects.create(
+            report=report,
+            field='username',
+            field_verbose='Username',
+            sort=1,
+            position=0,
+        )
+
+        generate_url = reverse('generate_report', args=[report.id])
+        response = self.client.get(generate_url)
+        data = '"data":[["alice"],["bob"],["chuck"],["testy"]]'
+        self.assertContains(response, data)
+
     def test_filter_isnull(self):
         self.make_people()
 
@@ -889,16 +918,7 @@ class ReportTests(TestCase):
         self.assertContains(response, data)
 
     def test_datetime_formatter(self):
-        user1 = User.objects.create_user('user1', '', '123')
-        user2 = User.objects.create_user('user2', '', '123')
-        user3 = User.objects.create_user('user3', '', '123')
-        user1.date_joined = datetime.datetime(2016, 9, 1, 7, 0, 0)
-        user2.date_joined = datetime.datetime(2016, 9, 2, 7, 10, 0)
-        user3.date_joined = datetime.datetime(2016, 9, 2, 7, 15, 0)
-        user1.save()
-        user2.save()
-        user3.save()
-
+        self.make_users()
         model = ContentType.objects.get(model='user', app_label="auth")
         report = Report.objects.create(root_model=model, name='User')
 
@@ -935,7 +955,7 @@ class ReportTests(TestCase):
         generate_url = reverse('generate_report', args=[report.id])
         response = self.client.get(generate_url)
 
-        data = '["user1","2016-09-01","07:00:00"],["user2","2016-09-02","07:10:00"],["user3","2016-09-02","07:15:00"]'
+        data = '["alice","2016-09-01","07:00:00"],["bob","2016-09-02","07:15:00"],["chuck","2016-09-02","07:10:00"]'
 
         self.assertContains(response, data)
 
