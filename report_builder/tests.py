@@ -860,6 +860,34 @@ class ReportTests(TestCase):
         data = '"data":[["Fisherman\'s Warf"],["MOMA"]]'
         self.assertContains(response, data)
 
+    def test_filter_in_foreign_key(self):
+        self.make_tiny_town()
+        model = ContentType.objects.get(model='restaurant', app_label="demo_models")
+        report = Report.objects.create(root_model=model, name='Waiters')
+
+        DisplayField.objects.create(
+            report=report,
+            path='place__',
+            field='name',
+            field_verbose='Place Name',
+            sort=1,
+            position=0,
+            group="True",
+        )
+
+        FilterField.objects.create(
+            report=report,
+            path='waiter__',
+            field='name',
+            filter_type='in',
+            filter_value='1,2,5,11',
+        )
+
+        generate_url = reverse('generate_report', args=[report.id])
+        response = self.client.get(generate_url)
+        data = '"data":[["AT&T Park"],["Alcatraz Island"],["Golden Gate Bridge"]]'
+        self.assertContains(response, data)
+
     def test_datetime_formatter(self):
         user1 = User.objects.create_user('user1', '', '123')
         user2 = User.objects.create_user('user2', '', '123')
