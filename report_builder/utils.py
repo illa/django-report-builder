@@ -92,10 +92,6 @@ def add_to_total(val):
     return 0
 
 
-def date_formatter(value, style):
-    return value.strftime(style)
-
-
 def formatter(value, style):
     """ Convert value to Decimal to apply numeric formats.
     value - The value we wish to format.
@@ -104,8 +100,6 @@ def formatter(value, style):
     if value is None:
         return None
 
-    if type(value) == datetime.datetime:
-        return date_formatter(value, style.string)
     try:
         value = Decimal(value)
     except Exception:

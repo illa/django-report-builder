@@ -788,12 +788,18 @@ class ReportTests(TestCase):
         user1 = User.objects.create_user('alice', '', '123')
         user2 = User.objects.create_user('chuck', '', '123')
         user3 = User.objects.create_user('bob', '', '123')
+        user4 = User.objects.create_user('emma', '', '123')
+        user5 = User.objects.create_user('daniel', '', '123')
         user1.date_joined = datetime.datetime(2016, 9, 1, 7, 0, 0)
         user2.date_joined = datetime.datetime(2016, 9, 2, 7, 10, 0)
         user3.date_joined = datetime.datetime(2016, 9, 2, 7, 15, 0)
+        user4.date_joined = datetime.datetime(2016, 9, 1, 8, 20, 0)
+        user5.date_joined = datetime.datetime(2016, 8, 1, 8, 20, 0)
         user1.save()
         user2.save()
         user3.save()
+        user4.save()
+        user5.save()
 
     def test_users(self):
         self.make_users()
@@ -810,7 +816,7 @@ class ReportTests(TestCase):
 
         generate_url = reverse('generate_report', args=[report.id])
         response = self.client.get(generate_url)
-        data = '"data":[["alice"],["bob"],["chuck"],["testy"]]'
+        data = '"data":[["alice"],["bob"],["chuck"],["daniel"],["emma"],["testy"]]'
         self.assertContains(response, data)
 
     def test_filter_isnull(self):
@@ -984,46 +990,42 @@ class ReportTests(TestCase):
         data = '"data":[["Fisherman\'s Warf"],["MOMA"]]'
         self.assertContains(response, data)
 
-    def test_datetime_formatter(self):
+    def test_group_by_day(self):
         self.make_users()
         model = ContentType.objects.get(model='user', app_label="auth")
         report = Report.objects.create(root_model=model, name='User')
 
-        day_format = Format(name='Y-m-d', string='%Y-%m-%d')
+        day_format = Format(name='Y-m-d', string='{:%Y-%m-%d}')
         day_format.save()
-
-        time_format = Format(name='H:M:S', string='%H:%M:%S')
-        time_format.save()
-
-        DisplayField.objects.create(
-            report=report,
-            field='username',
-            field_verbose='Username',
-            sort=1,
-            position=0,
-        )
 
         DisplayField.objects.create(
             report=report,
             field='date_joined',
             field_verbose='Day Joined',
             display_format=day_format,
-            position=1,
+            position=0,
+            sort=1,
+            group=True,
         )
 
         DisplayField.objects.create(
             report=report,
-            field='date_joined',
-            field_verbose='Time Joined',
-            display_format=time_format,
-            position=2,
+            field='username',
+            field_verbose='Username',
+            position=1,
+            aggregate='Count',
         )
 
+        FilterField.objects.create(
+            report=report,
+            field='username',
+            filter_type='exact',
+            filter_value='testy',
+            exclude=True,
+        )
         generate_url = reverse('generate_report', args=[report.id])
         response = self.client.get(generate_url)
-
-        data = '["alice","2016-09-01","07:00:00"],["bob","2016-09-02","07:15:00"],["chuck","2016-09-02","07:10:00"]'
-
+        data = '["2016-08-01",1],["2016-09-01",2],["2016-09-02",2]]'
         self.assertContains(response, data)
 
     def test_csv(self):
