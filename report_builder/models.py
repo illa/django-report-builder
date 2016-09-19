@@ -345,14 +345,10 @@ class Report(models.Model):
             data_list = sort_data(data_list, display_field)
 
         if display_totals:
-            display_totals_row = []
-            i = 0
+            display_totals_row = [None for t in totals]
             for display_field in display_totals:
-                while i < display_field.position:
-                    i += 1
-                    display_totals_row.append(None)
-                i += 1
-                display_totals_row.append(totals[i - 1])
+                pos = display_field.position
+                display_totals_row[pos] = totals[pos]
             # Add formats to display totals
             for pos, style in display_formats.items():
                 display_totals_row[pos] = formatter(display_totals_row[pos], style)

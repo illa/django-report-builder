@@ -819,6 +819,36 @@ class ReportTests(TestCase):
         data = '"data":[["alice"],["bob"],["chuck"],["daniel"],["emma"],["testy"]]'
         self.assertContains(response, data)
 
+    def test_totals_and_formats(self):
+        self.make_users()
+        model = ContentType.objects.get(model='user', app_label="auth")
+        report = Report.objects.create(root_model=model, name='User')
+
+        day_format = Format(name='Y-m-d', string='{:%Y-%m-%d}')
+        day_format.save()
+
+        DisplayField.objects.create(
+            report=report,
+            field='username',
+            field_verbose='Username',
+            sort=1,
+            position=0,
+            total=True,
+        )
+
+        DisplayField.objects.create(
+            report=report,
+            field='date_joined',
+            field_verbose='Date Joined',
+            display_format=day_format,
+            position=1,
+        )
+
+        generate_url = reverse('generate_report', args=[report.id])
+        response = self.client.get(generate_url)
+        data = '["TOTALS",""],[6,null]'
+        self.assertContains(response, data)
+
     def test_filter_isnull(self):
         self.make_people()
 
